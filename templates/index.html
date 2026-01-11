@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Generate Certificate of Origin from Bill of Lading and Invoice documents using AI">
+    <title>Certificate of Origin Generator | AI-Powered Document Processing</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <i class="fas fa-industry header-icon"></i>
+            <h1>Certificate of Origin Generator</h1>
+            <p>AI-powered extraction from Invoice & Bill of Lading documents. Generate official certificates for China
+                exports.</p>
+        </header>
+
+        <!-- Alert Container -->
+        <div id="alert-container"></div>
+
+
+        <!-- Tabs -->
+        <div class="tabs-container">
+            <div class="tabs">
+                <button class="tab active" data-tab="combined">
+                    <i class="fas fa-file-invoice tab-icon"></i>
+                    <span>Invoice & Bill</span>
+                </button>
+                <button class="tab" data-tab="auto">
+                    <i class="fas fa-search tab-icon"></i>
+                    <span>Bill Only</span>
+                </button>
+                <button class="tab" data-tab="manual">
+                    <i class="fas fa-pen tab-icon"></i>
+                    <span>Manual Entry</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab Content: Combined Upload -->
+        <div id="tab-combined" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-upload card-icon"></i>
+                    <h3 class="card-title">Upload Invoice & Bill of Lading</h3>
+                </div>
+
+                <div class="upload-grid">
+                    <!-- Invoice Upload -->
+                    <div class="upload-card">
+                        <div class="upload-card-title">
+                            <i class="fas fa-file-invoice"></i>
+                            <span>Invoice</span>
+                        </div>
+                        <div class="upload-zone" data-file-info="invoiceFileInfo">
+                            <i class="fas fa-file-pdf upload-icon"></i>
+                            <p class="upload-text">Click or drag to upload invoice</p>
+                            <p class="upload-hint">PDF files only</p>
+                            <label for="invoiceFile" class="sr-only">Upload Invoice PDF</label>
+                            <input type="file" id="invoiceFile" accept=".pdf" aria-label="Upload Invoice PDF">
+                        </div>
+                        <div class="file-info" id="invoiceFileInfo">
+                            <i class="fas fa-check-circle file-info-icon"></i>
+                            <span class="file-info-name"></span>
+                        </div>
+                    </div>
+
+                    <!-- Bill of Lading Upload -->
+                    <div class="upload-card">
+                        <div class="upload-card-title">
+                            <i class="fas fa-ship"></i>
+                            <span>Bill of Lading</span>
+                        </div>
+                        <div class="upload-zone" data-file-info="billFileCombinedInfo">
+                            <i class="fas fa-file-pdf upload-icon"></i>
+                            <p class="upload-text">Click or drag to upload bill</p>
+                            <p class="upload-hint">PDF files only</p>
+                            <label for="billFileCombined" class="sr-only">Upload Bill of Lading PDF</label>
+                            <input type="file" id="billFileCombined" accept=".pdf"
+                                aria-label="Upload Bill of Lading PDF">
+                        </div>
+                        <div class="file-info" id="billFileCombinedInfo">
+                            <i class="fas fa-check-circle file-info-icon"></i>
+                            <span class="file-info-name"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary btn-block" id="extractBothBtn" disabled>
+                    <i class="fas fa-rocket btn-icon"></i>
+                    <span>Extract Data & Generate Certificate</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab Content: Auto Extract -->
+        <div id="tab-auto" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-upload card-icon"></i>
+                    <h3 class="card-title">Upload Bill of Lading</h3>
+                </div>
+
+                <div class="upload-zone" data-file-info="billFileInfo">
+                    <i class="fas fa-file-pdf upload-icon"></i>
+                    <p class="upload-text">Click to upload or drag and drop</p>
+                    <p class="upload-hint">PDF files only • Max 16MB</p>
+                    <label for="billFile" class="sr-only">Upload Bill of Lading PDF</label>
+                    <input type="file" id="billFile" accept=".pdf" aria-label="Upload Bill of Lading PDF">
+                </div>
+                <div class="file-info" id="billFileInfo">
+                    <i class="fas fa-check-circle file-info-icon"></i>
+                    <span>Selected: <span class="file-info-name"></span></span>
+                </div>
+
+                <button class="btn btn-primary btn-block btn-margin-top" id="extractBtn" disabled>
+                    <i class="fas fa-search btn-icon"></i>
+                    <span>Extract Data & Generate Certificate</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab Content: Manual Entry -->
+        <div id="tab-manual" class="tab-content">
+            <form id="manualForm">
+                <!-- Buyer Information -->
+                <div class="card">
+                    <div class="form-section">
+                        <div class="section-title">
+                            <i class="fas fa-user section-icon"></i>
+                            <span>Buyer / Consignee Information</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group full-width">
+                                <label class="form-label">Company Name <span class="required">*</span></label>
+                                <input type="text" name="buyer_name" class="form-input" required
+                                    placeholder="e.g., ASHURBANIPAL COMPANY FOR GENERAL TRADING">
+                            </div>
+                            <div class="form-group full-width">
+                                <label class="form-label">Address <span class="required">*</span></label>
+                                <textarea name="buyer_address" class="form-textarea" required
+                                    placeholder="e.g., IRAQ - BAGHDAD / AL-QADISIYAH"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Mobile Number</label>
+                                <input type="text" name="buyer_mobile" class="form-input"
+                                    placeholder="e.g., 009647901860410">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Tax Number</label>
+                                <input type="text" name="buyer_tax" class="form-input" placeholder="e.g., 902191163">
+                            </div>
+                            <div class="form-group full-width">
+                                <label class="form-label">Email</label>
+                                <input type="email" name="buyer_email" class="form-input"
+                                    placeholder="e.g., company@example.com">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seller Information -->
+                <div class="card">
+                    <div class="form-section">
+                        <div class="section-title">
+                            <i class="fas fa-industry section-icon"></i>
+                            <span>Seller / Exporter Information</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group full-width">
+                                <label class="form-label">Company Name <span class="required">*</span></label>
+                                <input type="text" name="seller_name" class="form-input" required
+                                    placeholder="e.g., Yiwu Kabul Daily Necessities Factory">
+                            </div>
+                            <div class="form-group full-width">
+                                <label class="form-label">Address <span class="required">*</span></label>
+                                <textarea name="seller_address" class="form-textarea" required
+                                    placeholder="e.g., ShowRoom 602, the 6th Floor, Futian Market, Yiwu City, Zhejiang Province"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Product Information -->
+                <div class="card">
+                    <div class="form-section">
+                        <div class="section-title">
+                            <i class="fas fa-box section-icon"></i>
+                            <span>Product Information</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group full-width">
+                                <label class="form-label">Description of Goods <span class="required">*</span></label>
+                                <textarea name="product_description" class="form-textarea" required
+                                    placeholder="e.g., SIX HUNDRED FORTY (640) CTNS OF GLASS ELECTRIC KETTLE"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">HS Code <span class="required">*</span></label>
+                                <input type="text" name="hs_code" class="form-input" required
+                                    placeholder="e.g., 851671.00">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Quantity <span class="required">*</span></label>
+                                <input type="text" name="quantity" class="form-input" required placeholder="e.g., 640">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Weight <span class="required">*</span></label>
+                                <input type="text" name="weight" class="form-input" required
+                                    placeholder="e.g., 7,910 KGS G.W.">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Marks & Numbers</label>
+                                <input type="text" name="marks_numbers" class="form-input" value="N/M"
+                                    placeholder="Container number or N/M">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shipping Information -->
+                <div class="card">
+                    <div class="form-section">
+                        <div class="section-title">
+                            <i class="fas fa-ship section-icon"></i>
+                            <span>Shipping Information</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Port of Loading <span class="required">*</span></label>
+                                <input type="text" name="port_loading" class="form-input" required
+                                    placeholder="e.g., NINGBO CHINA">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Port of Discharge <span class="required">*</span></label>
+                                <input type="text" name="port_discharge" class="form-input" required
+                                    placeholder="e.g., UMM QASR IRAQ">
+                            </div>
+                            <div class="form-group full-width">
+                                <label class="form-label">Destination Country <span class="required">*</span></label>
+                                <input type="text" name="destination" class="form-input" required
+                                    placeholder="e.g., IRAQ">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Invoice Information -->
+                <div class="card">
+                    <div class="form-section">
+                        <div class="section-title">
+                            <i class="fas fa-file-invoice section-icon"></i>
+                            <span>Invoice Information</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Invoice Number <span class="required">*</span></label>
+                                <input type="text" name="invoice_number" class="form-input" required
+                                    placeholder="e.g., YKDNASH7137493">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Invoice Date <span class="required">*</span></label>
+                                <input type="date" name="invoice_date" class="form-input" required
+                                    aria-label="Invoice Date">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-file-alt btn-icon"></i>
+                    <span>Generate Certificate</span>
+                </button>
+            </form>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p class="loading-text">Processing your documents...</p>
+            <p class="loading-subtext">Extracting data using AI. This may take a moment.</p>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Certificate of Origin Generator • Powered by Google Gemini AI</p>
+            <p class="footer-link">
+                <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener">Get API Key</a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+
+</html>

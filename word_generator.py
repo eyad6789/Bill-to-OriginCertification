@@ -120,6 +120,7 @@ class WordCertificateGenerator:
         # Contact info
         'mobile': '009647901860410 - 009647844702070',
         'tax_number': '902191163',
+        'email': '***',  # Email placeholder in template
         
         # HS Code
         'hs_code': '851671.00',
@@ -134,6 +135,10 @@ class WordCertificateGenerator:
         
         # Declaration dates
         'declaration_date': 'NOV.25,2025',
+        
+        # Labels to remove (will be replaced with empty string - include newline to remove whitespace)
+        'signature_label_1': '\nPlace and date,signature and stamp of certifying authority',
+        'signature_label_2': '\nPlace and date,signature and stamp of authorized signatory',
     }
     
     def __init__(self, template_path: str):
@@ -250,6 +255,7 @@ class WordCertificateGenerator:
             # Contact info
             self.REPLACEMENTS['mobile']: data.buyer.mobile if data.buyer.mobile else "N/A",
             self.REPLACEMENTS['tax_number']: data.buyer.tax_number if data.buyer.tax_number else "N/A",
+            self.REPLACEMENTS['email']: f"EMAIL : {data.buyer.email}" if data.buyer.email else "",
             
             # HS Code
             self.REPLACEMENTS['hs_code']: data.product.hs_code,
@@ -270,6 +276,10 @@ class WordCertificateGenerator:
         for old_text, new_text in replacements.items():
             if old_text and new_text is not None:
                 self._replace_in_document(doc, old_text, new_text)
+        
+        # Remove signature/stamp labels (replace with empty string)
+        self._replace_in_document(doc, self.REPLACEMENTS['signature_label_1'], '')
+        self._replace_in_document(doc, self.REPLACEMENTS['signature_label_2'], '')
         
         # Handle marks separately (it's just "N/M" which appears in headers too)
         # Only replace in the specific table cell
@@ -343,7 +353,21 @@ class WordCertificateGenerator:
         return description[len(part1):].strip()
     
     def _convert_to_pdf(self, docx_path: str, pdf_path: str):
-        """Convert Word document to PDF using LibreOffice"""
+        """Convert Word document to PDF - uses docx2pdf on Windows, LibreOffice on Linux"""
+        import platform
+        
+        # Try docx2pdf first (Windows with Microsoft Word installed)
+        try:
+            from docx2pdf import convert
+            convert(docx_path, pdf_path)
+            print(f"PDF generated: {pdf_path}")
+            return True
+        except ImportError:
+            pass
+        except Exception as e:
+            print(f"docx2pdf failed: {e}")
+        
+        # Fallback to LibreOffice (Linux/Mac or if Word not available)
         try:
             output_dir = os.path.dirname(pdf_path) or '.'
             subprocess.run([
@@ -352,23 +376,91 @@ class WordCertificateGenerator:
                 docx_path
             ], check=True, capture_output=True)
             print(f"PDF generated: {pdf_path}")
+            return True
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             print(f"Warning: Could not convert to PDF: {e}")
-            print("Install LibreOffice for PDF conversion: apt install libreoffice")
+            if platform.system() == 'Windows':
+                print("Make sure Microsoft Word is installed for PDF conversion")
+            else:
+                print("Install LibreOffice for PDF conversion: apt install libreoffice")
+            return False
+
 
 
 class GeminiExtractor:
-    """Extract data from Bill of Lading using Google Gemini API"""
+    """Extract data from Bill of Lading using Google Gemini API with automatic model fallback"""
     
-    def __init__(self, api_key: str):
+    # Models to try in order of preference
+    MODELS = [
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-3-flash',
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-latest',
+        'gemini-pro',
+        'gemma-3-27b',
+        'gemma-3-12b',
+        'gemma-3-4b',
+        'gemma-3-2b',
+        'gemma-3-1b',
+    ]
+    
+    def __init__(self, api_key: str = None):
+        """Initialize with API key - loads from .env if not provided"""
+        if api_key is None:
+            from dotenv import load_dotenv
+            load_dotenv()
+            api_key = os.environ.get('GEMINI_API_KEY')
+        
+        if not api_key or api_key == 'your_api_key_here':
+            raise ValueError("GEMINI_API_KEY not set. Please set it in .env file or pass directly.")
+        
+        self.api_key = api_key
+        
         if USE_NEW_GENAI is True:
             self.client = genai.Client(api_key=api_key)
-            self.model_name = 'gemini-1.5-flash'
         elif USE_NEW_GENAI is False:
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
         else:
             raise ImportError("Google Generative AI package not installed")
+    
+    def _call_with_fallback(self, prompt, image=None):
+        """Try each model until one works"""
+        last_error = None
+        
+        for model_name in self.MODELS:
+            try:
+                print(f"Trying model: {model_name}")
+                
+                if USE_NEW_GENAI:
+                    if image:
+                        response = self.client.models.generate_content(
+                            model=model_name,
+                            contents=[prompt, image]
+                        )
+                    else:
+                        response = self.client.models.generate_content(
+                            model=model_name,
+                            contents=prompt
+                        )
+                else:
+                    model = genai.GenerativeModel(model_name)
+                    if image:
+                        response = model.generate_content([prompt, image])
+                    else:
+                        response = model.generate_content(prompt)
+                
+                # If we got here, the model worked
+                print(f"Success with model: {model_name}")
+                return response
+                
+            except Exception as e:
+                last_error = e
+                print(f"Model {model_name} failed: {str(e)[:100]}")
+                continue
+        
+        # All models failed
+        raise Exception(f"All models failed. Last error: {last_error}")
     
     def extract_from_bill(self, pdf_path: str) -> dict:
         text_content = self._extract_pdf_text(pdf_path)
@@ -380,50 +472,77 @@ class GeminiExtractor:
     
     def _extract_from_text(self, text_content: str) -> dict:
         prompt = self._get_extraction_prompt(f"Bill of Lading Content:\n{text_content}")
-        
-        if USE_NEW_GENAI:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt
-            )
-        else:
-            response = self.model.generate_content(prompt)
-        
+        response = self._call_with_fallback(prompt)
         return self._parse_response(response)
     
     def _extract_from_pdf_image(self, pdf_path: str) -> dict:
-        import tempfile
-        from pathlib import Path
+        """Extract from PDF by converting to image using PyMuPDF (pure Python, no external deps)"""
         
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_prefix = os.path.join(tmpdir, "page")
-            
-            try:
-                subprocess.run([
-                    'pdftoppm', '-png', '-r', '200',
-                    pdf_path, output_prefix
-                ], check=True, capture_output=True)
-            except (FileNotFoundError, subprocess.CalledProcessError):
-                return {}
-            
-            image_files = sorted(Path(tmpdir).glob("page*.png"))
-            if not image_files:
-                return {}
-            
+        # Try PyMuPDF first (pure Python, works everywhere)
+        try:
+            print(f"Trying PyMuPDF conversion for: {pdf_path}")
+            import fitz  # PyMuPDF
+            import io
             import PIL.Image
-            image = PIL.Image.open(str(image_files[0]))
             
-            prompt = self._get_extraction_prompt("Analyze this Bill of Lading image.")
-            
+            doc = fitz.open(pdf_path)
+            if len(doc) > 0:
+                page = doc[0]  # First page
+                # Render at higher resolution for better OCR
+                mat = fitz.Matrix(2.0, 2.0)  # 2x zoom for better quality
+                pix = page.get_pixmap(matrix=mat)
+                
+                # Convert to PIL Image
+                img_data = pix.tobytes("png")
+                image = PIL.Image.open(io.BytesIO(img_data))
+                
+                print(f"PyMuPDF: Converted PDF to {image.size[0]}x{image.size[1]} image")
+                
+                prompt = self._get_extraction_prompt("Analyze this Bill of Lading image and extract all shipping information.")
+                response = self._call_with_fallback(prompt, image)
+                result = self._parse_response(response)
+                if result:
+                    print("Success with PyMuPDF image extraction!")
+                    return result
+            doc.close()
+        except Exception as e:
+            print(f"PyMuPDF extraction failed: {str(e)[:100]}")
+        
+        # Fallback: Try Gemini native PDF upload
+        try:
+            print("Fallback: Trying Gemini native PDF upload...")
             if USE_NEW_GENAI:
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=[prompt, image]
-                )
-            else:
-                response = self.model.generate_content([prompt, image])
-            
-            return self._parse_response(response)
+                with open(pdf_path, 'rb') as f:
+                    pdf_content = f.read()
+                
+                from google.genai import types
+                prompt = self._get_extraction_prompt("Extract all information from this Bill of Lading PDF document.")
+                
+                for model_name in self.MODELS:
+                    try:
+                        print(f"Trying model with PDF: {model_name}")
+                        response = self.client.models.generate_content(
+                            model=model_name,
+                            contents=[
+                                types.Content(
+                                    parts=[
+                                        types.Part.from_bytes(data=pdf_content, mime_type='application/pdf'),
+                                        types.Part.from_text(text=prompt)
+                                    ]
+                                )
+                            ]
+                        )
+                        result = self._parse_response(response)
+                        if result:
+                            print(f"Success with PDF upload using model: {model_name}")
+                            return result
+                    except Exception as e:
+                        print(f"PDF upload failed with {model_name}: {str(e)[:100]}")
+                        continue
+        except Exception as e:
+            print(f"Gemini native PDF upload failed: {str(e)[:100]}")
+        
+        return {}
     
     def _get_extraction_prompt(self, context: str) -> str:
         return f"""
@@ -437,7 +556,12 @@ Extract shipping document information as JSON:
     "invoice": {{"invoice_number": "", "invoice_date": ""}}
 }}
 
-Return ONLY JSON. Date format: MMM.DD,YYYY (e.g., OCT.09,2025)
+IMPORTANT DATA SOURCE RULES:
+- From BILL OF LADING: buyer name, buyer address, seller name, seller address, product description, HS code, quantity, weight, shipping ports, destination country
+- From INVOICE ONLY: invoice number and invoice date
+- Date format: MMM.DD,YYYY (e.g., OCT.09,2025)
+
+Return ONLY valid JSON, no explanation.
 
 {context}
 """
