@@ -1,6 +1,6 @@
 # Certificate of Origin Generator
 
-A Python system that extracts data from Bill of Lading PDFs and generates Chinese Certificate of Origin documents using Google Gemini AI.
+A Python system that extracts data from Bill of Lading PDFs and generates Chinese Certificate of Origin documents using Google Gemini
 
 ## Features
 
