@@ -557,8 +557,8 @@ Extract shipping document information as JSON:
 }}
 
 IMPORTANT DATA SOURCE RULES:
-- From BILL OF LADING: buyer name, buyer address, seller name, seller address, product description, HS code, quantity, weight, shipping ports, destination country
-- From INVOICE ONLY: invoice number and invoice date
+- From BILL OF LADING: buyer address, seller address, product description, HS code, quantity, weight, shipping ports, destination country
+- From INVOICE: buyer name, seller name, invoice number, invoice date, mobile, tax_number, email
 - Date format: MMM.DD,YYYY (e.g., OCT.09,2025)
 
 Return ONLY valid JSON, no explanation.

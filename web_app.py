@@ -207,16 +207,25 @@ def generate_combined():
                     extracted_data['invoice']['invoice_number'] = invoice_data['invoice']['invoice_number']
                 if invoice_data['invoice'].get('invoice_date'):
                     extracted_data['invoice']['invoice_date'] = invoice_data['invoice']['invoice_date']
-            # Also take mobile, tax_number, email from invoice (buyer contact info)
+            # Also take buyer name, mobile, tax_number, email from invoice
             if invoice_data and invoice_data.get('buyer'):
                 if not extracted_data.get('buyer'):
                     extracted_data['buyer'] = {}
+                if invoice_data['buyer'].get('name'):
+                    extracted_data['buyer']['name'] = invoice_data['buyer']['name']
                 if invoice_data['buyer'].get('mobile'):
                     extracted_data['buyer']['mobile'] = invoice_data['buyer']['mobile']
                 if invoice_data['buyer'].get('tax_number'):
                     extracted_data['buyer']['tax_number'] = invoice_data['buyer']['tax_number']
                 if invoice_data['buyer'].get('email'):
                     extracted_data['buyer']['email'] = invoice_data['buyer']['email']
+            
+            # Take seller name from invoice
+            if invoice_data and invoice_data.get('seller'):
+                if not extracted_data.get('seller'):
+                    extracted_data['seller'] = {}
+                if invoice_data['seller'].get('name'):
+                    extracted_data['seller']['name'] = invoice_data['seller']['name']
         elif invoice_data:
             extracted_data = invoice_data
         else:
